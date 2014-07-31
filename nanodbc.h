@@ -438,6 +438,15 @@ public:
     //! \see open(), prepare(), execute(), result, transaction
     class result execute(long batch_operations = 1, long timeout = 0);
 
+    //! \brief Returns the input and output paramters of the specified stored procedure.
+    //! \param catalog The catalog name of the procedure.
+    //! \param schema Pattern to use for schema names.
+    //! \param procedure The name of the procedure.
+    //! \param column Pattern to use for column names.
+    //! \throws database_error
+    //! \return A result set object.
+    class result procedure_columns(const string_type& catalog, const string_type& schema, const string_type& procedure, const string_type& column);
+    
     //! \brief Returns the number of rows affected by the request or -1 if the number of affected rows is not available.
     //! \throws database_error
     long affected_rows() const;
@@ -926,7 +935,7 @@ public:
     int column_datatype(const string_type& column_name) const;
 
     //! Returns the next result, for example when stored procedure returns multiple result sets.
-    bool next_result() const;
+    bool next_result();
 
     #ifndef DOXYGEN
         #ifdef NANODBC_USE_CPP11

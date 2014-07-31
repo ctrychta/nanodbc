@@ -1131,6 +1131,36 @@ public:
         return result(statement, batch_operations);
     }
 
+    result procedure_columns(
+        const string_type& catalog
+        , const string_type& schema
+        , const string_type& procedure
+        , const string_type& column
+        , statement& statement)
+    {
+        if(!open())
+            throw programming_error("statement has no associated open connection");
+        
+        RETCODE rc;
+        NANODBC_CALL_RC(
+            NANODBC_UNICODE(SQLProcedureColumns)
+            , rc
+            , stmt_
+            , (NANODBC_SQLCHAR*)(catalog.empty() ? NULL : catalog.c_str())
+            , (catalog.empty() ? 0 : SQL_NTS)
+            , (NANODBC_SQLCHAR*)(schema.empty() ? NULL : schema.c_str())
+            , (schema.empty() ? 0 : SQL_NTS)
+            , (NANODBC_SQLCHAR*)procedure.c_str()
+            , SQL_NTS
+            , (NANODBC_SQLCHAR*)(column.empty() ? NULL : column.c_str())
+            , (column.empty() ? 0 : SQL_NTS));
+
+        if (!success(rc))
+            NANODBC_THROW_DATABASE_ERROR(stmt_, SQL_HANDLE_STMT);
+
+        return result(statement, 1);
+    }
+    
     long affected_rows() const
     {
         SQLLEN rows;
@@ -1524,8 +1554,7 @@ public:
 
     ~result_impl() throw()
     {
-        before_move();
-        delete[] bound_columns_;
+        cleanup_bound_columns();
     }
 
     void* native_statement_handle() const
@@ -1683,7 +1712,7 @@ public:
         return col.sqltype_;
     }
 
-    bool next_result() const
+    bool next_result()
     {
         RETCODE rc;
         NANODBC_CALL_RC(
@@ -1694,6 +1723,7 @@ public:
             return false;
         if(!success(rc))
             NANODBC_THROW_DATABASE_ERROR(stmt_.native_statement_handle(), SQL_HANDLE_STMT);
+        auto_bind();
         return true;
     }
 
@@ -1801,6 +1831,15 @@ private:
         col.clen_ = 0;
     }
 
+    void cleanup_bound_columns() throw()
+    {
+        before_move();
+        delete[] bound_columns_;
+        bound_columns_ = NULL;
+        bound_columns_size_ = 0;
+        bound_columns_by_name_.clear();
+    }
+
     bool fetch(long rows, SQLUSMALLINT orientation)
     {
         before_move();
@@ -1820,6 +1859,8 @@ private:
 
     void auto_bind()
     {
+        cleanup_bound_columns();
+
         const short n_columns = columns();
         if(n_columns < 1)
             return;
@@ -2509,6 +2550,15 @@ result statement::execute(long batch_operations, long timeout)
     return impl_->execute(batch_operations, timeout, *this);
 }
 
+result statement::procedure_columns(
+    const string_type& catalog
+    , const string_type& schema
+    , const string_type& procedure
+    , const string_type& column)
+{
+    return impl_->procedure_columns(catalog, schema, procedure, column, *this);
+}
+
 long statement::affected_rows() const
 {
     return impl_->affected_rows();
@@ -2774,7 +2824,7 @@ int result::column_datatype(const string_type& column_name) const
     return impl_->column_datatype(column_name);   
 }
 
-bool result::next_result() const
+bool result::next_result()
 {
     return impl_->next_result();
 }
